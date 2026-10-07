@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>國立臺灣大學 | 進修推廣學院115PMBA 財務收支公告</title>
-<!-- 引入 SheetJS 讓網頁完美解析 Google 試算表 -->
+<!-- 引入 SheetJS 讓網頁完美解析 Google 試算表多工作表 -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
     body {
@@ -190,7 +190,7 @@
 <body>
 
 <div class="toolbar">
-    <div class="toolbar-left">🟢 Google 試算表即時連動中</div>
+    <div class="toolbar-left">🟢 Google 試算表多工作表連動中</div>
     <div class="toolbar-right">
         <button onclick="loadGoogleSheet()">🔄 重新整理資料</button>
         <button onclick="window.print()">🖨️ 列印 / 存成 PDF</button>
@@ -200,13 +200,13 @@
 <div class="header">
     <div class="header-left">
         <div class="school">國立臺灣大學 | 進修推廣學院115PMBA</div>
-        <div class="date-info">公告日期 | 2026/10/6、財務負責 | 陳婉萍.林儀芬</div>
+        <div class="date-info">公告日期 | <span id="pubDate">2026/10/6</span>、財務負責 | <span id="pubPerson">陳婉萍.林儀芬</span></div>
     </div>
     <div class="header-right">財務收支公告</div>
 </div>
 
 <div class="container">
-    <div class="period-card">
+    <div class="period-card" id="periodCardText">
         收支明細 | 期間：2026/8/1 ~ 2026/10/3
     </div>
 
@@ -260,7 +260,6 @@
 </div>
 
 <script>
-    // 您的 Google 試算表自動匯出連結
     const sheetDownloadUrl = "https://docs.google.com/spreadsheets/d/1mNaHA0vF4oHWp14nyZTziDh4Q-E7Qi0j/export?format=xlsx";
 
     async function loadGoogleSheet() {
@@ -271,32 +270,27 @@
             let data = await response.arrayBuffer();
             let workbook = XLSX.read(data, { type: 'array' });
 
-            // 讀取第一個工作表
-            let firstSheetName = workbook.SheetNames[0];
-            let rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1 });
+            // 1. 讀取「公告日期」分頁（假設為第一個分頁或名稱符合者）
+            let metaSheet = workbook.Sheets["公告日期"] || workbook.Sheets[workbook.SheetNames[0]];
+            if (metaSheet) {
+                let metaRows = XLSX.utils.sheet_to_json(metaSheet, { header: 1 });
+                // 這裡可以依您的設定抓取公告日期與負責人，若有對應儲存格可在此調整
+            }
 
+            // 2. 讀取「收入明細表」分頁
+            let incSheet = workbook.Sheets["收入明細表"] || workbook.Sheets[1];
             let totalInc = 0;
-            let totalExp = 0;
             let incTbody = document.querySelector('#incomeTable tbody');
-            let expTbody = document.querySelector('#expenseTable tbody');
-            
             incTbody.innerHTML = "";
-            expTbody.innerHTML = "";
-
-            // 從第 1 列開始解析（略過標題列 i=0）
-            // 假設您的試算表格式：欄位A = 項目, 欄位B = 金額, 欄位C = 類型 ('income' 或 'expense')
-            for (let i = 1; i < rows.length; i++) {
-                let row = rows[i];
-                if (row[0] && row[1] !== undefined) {
-                    let desc = row[0];
-                    let amount = parseFloat(row[1]) || 0;
-                    let type = row[2] ? String(row[2]).trim().toLowerCase() : 'income';
-
-                    if (type === 'expense' || type === '支出') {
-                        totalExp += amount;
-                        let tr = expTbody.insertRow();
-                        tr.innerHTML = `<td>${desc}</td><td class="text-right">${amount.toLocaleString()}</td>`;
-                    } else {
+            
+            if (incSheet) {
+                let incRows = XLSX.utils.sheet_to_json(incSheet, { header: 1 });
+                // 從第 1 列開始（略過標題列 i=0），假設欄A為項目、欄B為金額
+                for (let i = 1; i < incRows.length; i++) {
+                    let row = incRows[i];
+                    if (row[0] && row[1] !== undefined) {
+                        let desc = row[0];
+                        let amount = parseFloat(row[1]) || 0;
                         totalInc += amount;
                         let tr = incTbody.insertRow();
                         tr.innerHTML = `<td>${desc}</td><td class="text-right">${amount.toLocaleString()}</td>`;
@@ -304,7 +298,28 @@
                 }
             }
 
-            // 更新總結餘與摘要
+            // 3. 讀取「支出明細表」分頁
+            let expSheet = workbook.Sheets["支出明細表"] || workbook.Sheets[2];
+            let totalExp = 0;
+            let expTbody = document.querySelector('#expenseTable tbody');
+            expTbody.innerHTML = "";
+
+            if (expSheet) {
+                let expRows = XLSX.utils.sheet_to_json(expSheet, { header: 1 });
+                // 從第 1 列開始（略過標題列 i=0），假設欄A為項目、欄B為金額
+                for (let i = 1; i < expRows.length; i++) {
+                    let row = expRows[i];
+                    if (row[0] && row[1] !== undefined) {
+                        let desc = row[0];
+                        let amount = parseFloat(row[1]) || 0;
+                        totalExp += amount;
+                        let tr = expTbody.insertRow();
+                        tr.innerHTML = `<td>${desc}</td><td class="text-right">${amount.toLocaleString()}</td>`;
+                    }
+                }
+            }
+
+            // 4. 計算總結餘
             let balance = totalInc - totalExp;
             document.getElementById('totalIncome').innerText = "NT$ " + totalInc.toLocaleString();
             document.getElementById('totalExpense').innerText = "NT$ " + totalExp.toLocaleString();
