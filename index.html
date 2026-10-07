@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>國立臺灣大學 | 進修推廣學院115PMBA 財務收支公告</title>
+<!-- 引入 SheetJS 讓網頁完美解析 Google 試算表 -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+    body {
+        font-family: "Noto Sans TC", Arial, sans-serif;
+        background-color: #f4f6f9;
+        margin: 0;
+        padding: 0;
+        color: #333;
+    }
+    .header {
+        background-color: #1b365d;
+        color: white;
+        padding: 35px 45px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 20px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .header-left .school {
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        letter-spacing: 0.5px;
+    }
+    .header-left .date-info {
+        font-size: 13px;
+        color: #b0c4de;
+    }
+    .header-right {
+        font-size: 34px;
+        font-weight: bold;
+        letter-spacing: 3px;
+    }
+    
+    .container {
+        max-width: 1250px;
+        margin: 30px auto;
+        padding: 0 20px;
+    }
+
+    .period-card {
+        background: #eef2f7;
+        padding: 16px 25px;
+        border-radius: 8px;
+        font-size: 15px;
+        color: #2c3e50;
+        margin-bottom: 25px;
+        border-left: 6px solid #1b365d;
+        font-weight: bold;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    }
+
+    .balance-card {
+        background: #1b365d;
+        color: white;
+        padding: 30px 35px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        box-shadow: 0 6px 20px rgba(27, 54, 93, 0.15);
+    }
+    .balance-card .label {
+        font-size: 15px;
+        color: #b0c4de;
+        margin-bottom: 8px;
+    }
+    .balance-card .value {
+        font-size: 46px;
+        font-weight: bold;
+        letter-spacing: 1px;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+        margin-bottom: 35px;
+    }
+    @media (max-width: 768px) {
+        .summary-grid { grid-template-columns: 1fr; }
+    }
+    .summary-box {
+        background: white;
+        padding: 25px 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+    }
+    .summary-box.income { border-left: 6px solid #00a86b; }
+    .summary-box.expense { border-left: 6px solid #e74c3c; }
+    .summary-box .box-label {
+        font-size: 14px;
+        color: #7f8c8d;
+        margin-bottom: 8px;
+    }
+    .summary-box .box-value {
+        font-size: 34px;
+        font-weight: bold;
+    }
+    .summary-box.income .box-value { color: #00a86b; }
+    .summary-box.expense .box-value { color: #e74c3c; }
+
+    .details-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+    }
+    @media (max-width: 900px) {
+        .details-grid { grid-template-columns: 1fr; }
+    }
+    .section-title {
+        font-size: 22px;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+    .details-section.income-section .section-title { color: #00a86b; }
+    .details-section.expense-section .section-title { color: #e74c3c; }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+        margin-bottom: 15px;
+    }
+    th, td {
+        padding: 14px 18px;
+        text-align: left;
+        border-bottom: 1px solid #edf2f7;
+        font-size: 14px;
+    }
+    th {
+        color: white;
+        font-weight: bold;
+    }
+    .income-section th { background-color: #00a86b; }
+    .expense-section th { background-color: #e74c3c; }
+    
+    .text-right { text-align: right; }
+
+    .toolbar {
+        background: #fff;
+        padding: 12px 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .toolbar-left {
+        font-size: 13px;
+        color: #27ae60;
+        font-weight: bold;
+    }
+    .toolbar-right {
+        display: flex;
+        gap: 10px;
+    }
+    button {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        background-color: #2980b9;
+        color: white;
+    }
+    button:hover { background-color: #1f618d; }
+
+    @media print {
+        .toolbar { display: none; }
+        body { background: white; }
+    }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+    <div class="toolbar-left">🟢 Google 試算表即時連動中</div>
+    <div class="toolbar-right">
+        <button onclick="loadGoogleSheet()">🔄 重新整理資料</button>
+        <button onclick="window.print()">🖨️ 列印 / 存成 PDF</button>
+    </div>
+</div>
+
+<div class="header">
+    <div class="header-left">
+        <div class="school">國立臺灣大學 | 進修推廣學院115PMBA</div>
+        <div class="date-info">公告日期 | 2026/10/6、財務負責 | 陳婉萍.林儀芬</div>
+    </div>
+    <div class="header-right">財務收支公告</div>
+</div>
+
+<div class="container">
+    <div class="period-card">
+        收支明細 | 期間：2026/8/1 ~ 2026/10/3
+    </div>
+
+    <div class="balance-card">
+        <div class="label">本期結餘</div>
+        <div class="value" id="grandBalance">NT$ 0</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box income">
+            <div class="box-label">本期收入</div>
+            <div class="box-value" id="totalIncome">NT$ 0</div>
+        </div>
+        <div class="summary-box expense">
+            <div class="box-label">本期支出</div>
+            <div class="box-value" id="totalExpense">NT$ 0</div>
+        </div>
+    </div>
+
+    <div class="details-grid">
+        <div class="details-section income-section">
+            <div class="section-title">收入明細</div>
+            <table id="incomeTable">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th class="text-right" style="width: 150px;">金額 (NT$)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 動態載入 -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="details-section expense-section">
+            <div class="section-title">支出明細</div>
+            <table id="expenseTable">
+                <thead>
+                    <tr>
+                        <th>項目</th>
+                        <th class="text-right" style="width: 150px;">金額 (NT$)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 動態載入 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 您的 Google 試算表自動匯出連結
+    const sheetDownloadUrl = "https://docs.google.com/spreadsheets/d/1mNaHA0vF4oHWp14nyZTziDh4Q-E7Qi0j/export?format=xlsx";
+
+    async function loadGoogleSheet() {
+        try {
+            let response = await fetch(sheetDownloadUrl);
+            if (!response.ok) throw new Error("無法讀取 Google 試算表，請確認共用權限是否設為公開。");
+            
+            let data = await response.arrayBuffer();
+            let workbook = XLSX.read(data, { type: 'array' });
+
+            // 讀取第一個工作表
+            let firstSheetName = workbook.SheetNames[0];
+            let rows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { header: 1 });
+
+            let totalInc = 0;
+            let totalExp = 0;
+            let incTbody = document.querySelector('#incomeTable tbody');
+            let expTbody = document.querySelector('#expenseTable tbody');
+            
+            incTbody.innerHTML = "";
+            expTbody.innerHTML = "";
+
+            // 從第 1 列開始解析（略過標題列 i=0）
+            // 假設您的試算表格式：欄位A = 項目, 欄位B = 金額, 欄位C = 類型 ('income' 或 'expense')
+            for (let i = 1; i < rows.length; i++) {
+                let row = rows[i];
+                if (row[0] && row[1] !== undefined) {
+                    let desc = row[0];
+                    let amount = parseFloat(row[1]) || 0;
+                    let type = row[2] ? String(row[2]).trim().toLowerCase() : 'income';
+
+                    if (type === 'expense' || type === '支出') {
+                        totalExp += amount;
+                        let tr = expTbody.insertRow();
+                        tr.innerHTML = `<td>${desc}</td><td class="text-right">${amount.toLocaleString()}</td>`;
+                    } else {
+                        totalInc += amount;
+                        let tr = incTbody.insertRow();
+                        tr.innerHTML = `<td>${desc}</td><td class="text-right">${amount.toLocaleString()}</td>`;
+                    }
+                }
+            }
+
+            // 更新總結餘與摘要
+            let balance = totalInc - totalExp;
+            document.getElementById('totalIncome').innerText = "NT$ " + totalInc.toLocaleString();
+            document.getElementById('totalExpense').innerText = "NT$ " + totalExp.toLocaleString();
+            
+            let balEl = document.getElementById('grandBalance');
+            balEl.innerText = "NT$ " + balance.toLocaleString();
+            balEl.style.color = balance < 0 ? '#ff6b6b' : '#ffffff';
+
+        } catch (error) {
+            console.error(error);
+            alert("讀取試算表失敗：" + error.message);
+        }
+    }
+
+    window.onload = loadGoogleSheet;
+</script>
+
+</body>
+</html>
