@@ -200,14 +200,14 @@
 <div class="header">
     <div class="header-left">
         <div class="school">國立臺灣大學 | 進修推廣學院115PMBA</div>
-        <div class="date-info">公告日期 | <span id="pubDate">2026/10/6</span>、財務負責 | <span id="pubPerson">陳婉萍.林儀芬</span></div>
+        <div class="date-info">公告日期 | <span id="pubDate">載入中...</span>、財務負責 | <span id="pubPerson">載入中...</span></div>
     </div>
     <div class="header-right">財務收支公告</div>
 </div>
 
 <div class="container">
     <div class="period-card" id="periodCardText">
-        收支明細 | 期間：2026/8/1 ~ 2026/10/3
+        收支明細 | 期間：載入中...
     </div>
 
     <div class="balance-card">
@@ -262,6 +262,22 @@
 <script>
     const sheetDownloadUrl = "https://docs.google.com/spreadsheets/d/1mNaHA0vF4oHWp14nyZTziDh4Q-E7Qi0j/export?format=xlsx";
 
+    // 處理 Excel 日期序列號轉成標準 YYYY/MM/DD 的函式
+    function parseExcelDate(val) {
+        if (!val) return "";
+        // 如果是數字（Excel 內部日期序列號）
+        if (typeof val === 'number') {
+            let utc_days = Math.floor(val - 25569);
+            let utc_value = utc_days * 86400;
+            let date_info = new Date(utc_value * 1000);
+            let year = date_info.getUTCFullYear();
+            let month = date_info.getUTCMonth() + 1;
+            let day = date_info.getUTCDate();
+            return `${year}/${month}/${day}`;
+        }
+        return String(val).trim();
+    }
+
     async function loadGoogleSheet() {
         try {
             let response = await fetch(sheetDownloadUrl);
@@ -274,16 +290,16 @@
             let metaSheet = workbook.Sheets["公告日期"] || workbook.Sheets[workbook.SheetNames[0]];
             if (metaSheet) {
                 let metaRows = XLSX.utils.sheet_to_json(metaSheet, { header: 1 });
-                // row[0] 是標題列對應，row[1] 是數值欄 (B欄)
-                // 根據您的截圖：B1是公告日期(index 0), B2是財務負責人(index 1), B3是期間(index 2)
-                if (metaRows[0] && metaRows[0][1]) {
-                    document.getElementById('pubDate').innerText = metaRows[0][1];
+                
+                if (metaRows[0] && metaRows[0][1] !== undefined) {
+                    document.getElementById('pubDate').innerText = parseExcelDate(metaRows[0][1]);
                 }
-                if (metaRows[1] && metaRows[1][1]) {
+                if (metaRows[1] && metaRows[1][1] !== undefined) {
                     document.getElementById('pubPerson').innerText = metaRows[1][1];
                 }
-                if (metaRows[2] && metaRows[2][1]) {
-                    document.getElementById('periodCardText').innerText = "收支明細 | 期間：" + metaRows[2][1];
+                if (metaRows[2] && metaRows[2][1] !== undefined) {
+                    let periodVal = parseExcelDate(metaRows[2][1]);
+                    document.getElementById('periodCardText').innerText = "收支明細 | 期間：" + periodVal;
                 }
             }
 
