@@ -258,13 +258,16 @@
 </div>
 
 <script>
-    // 您的 Google 試算表 ID
-    const spreadsheetId = "1mNaHA0vF4oHWp14nyZTziDh4Q-E7Qi0j";
+    // 使用您剛剛「發布到網路」產生的正式發布基礎網址
+    const pubBaseUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSPvb_if98JkfqgeBIMJMX1jQgJDr3gkOQewqfxwN1Hjp5Ci7Lns0Zgw5kr6qUnJg/pub";
 
-    // 透過 Google Visualization API 抓取各分頁的公開 CSV 格式資料
-    const metaCsvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=公告日期`;
-    const incomeCsvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=收入明細表`;
-    const expenseCsvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=支出明細表`;
+    const metaCsvUrl = `${pubBaseUrl}?output=csv&gid=0`;          // 假設公告日期在第一個分頁
+    const incomeCsvUrl = `${pubBaseUrl}?output=csv&gid=1387609805`; // 請對應您的收入明細表 gid
+    const expenseCsvUrl = `${pubBaseUrl}?output=csv&gid=204273877`; // 請對應您的支出明細表 gid
+
+    // 💡 如果您不確定各分頁的 gid，也可以直接用下面這套萬用備援：
+    // 網頁會直接抓取您原本的試算表 ID 轉為通用公開格式
+    const fallbackId = "1mNaHA0vF4oHWp14nyZTziDh4Q-E7Qi0j";
 
     function parseCSV(text) {
         let lines = text.split("\n");
@@ -289,26 +292,26 @@
 
     async function loadFinancialData() {
         try {
-            // 1. 讀取公告日期與負責人
-            let metaRes = await fetch(metaCsvUrl);
+            // 嘗試透過公開發布連結抓取
+            let metaRes = await fetch(`https://docs.google.com/spreadsheets/d/e/2PACX-1vSPvb_if98JkfqgeBIMJMX1jQgJDr3gkOQewqfxwN1Hjp5Ci7Lns0Zgw5kr6qUnJg/pub?output=csv&single=true`);
             if (metaRes.ok) {
-                let metaText = await metaRes.text();
-                let metaRows = parseCSV(metaText);
-                if (metaRows[0] && metaRows[0][1]) document.getElementById('pubDate').innerText = metaRows[0][1];
-                if (metaRows[1] && metaRows[1][1]) document.getElementById('pubPerson').innerText = metaRows[1][1];
-                if (metaRows[2] && metaRows[2][1]) document.getElementById('periodCardText').innerText = "收支明細 | 期間：" + metaRows[2][1];
+                let text = await metaRes.text();
+                let rows = parseCSV(text);
+                // 這裡會自動帶入前幾行資料作為標題與期間
+                if (rows[0] && rows[0][1]) document.getElementById('pubDate').innerText = rows[0][1];
+                if (rows[1] && rows[1][1]) document.getElementById('pubPerson').innerText = rows[1][1];
+                if (rows[2] && rows[2][1]) document.getElementById('periodCardText').innerText = "收支明細 | 期間：" + rows[2][1];
             }
 
-            // 2. 讀取收入明細
+            // 載入收入與支出表格資料 (透過公開 API 備援通道)
+            let resInc = await fetch(`https://docs.google.com/spreadsheets/d/${fallbackId}/gviz/tq?tqx=out:csv&sheet=收入明細表`);
             let totalInc = 0;
             let incTbody = document.querySelector('#incomeTable tbody');
             incTbody.innerHTML = "";
-            let incRes = await fetch(incomeCsvUrl);
-            if (incRes.ok) {
-                let incText = await incRes.text();
-                let incRows = parseCSV(incText);
-                for (let i = 1; i < incRows.length; i++) {
-                    let row = incRows[i];
+            if (resInc.ok) {
+                let rows = parseCSV(await resInc.text());
+                for (let i = 1; i < rows.length; i++) {
+                    let row = rows[i];
                     if (row[0] && row[1] !== undefined) {
                         let desc = row[0];
                         let amount = parseFloat(row[1].replace(/,/g, '')) || 0;
@@ -319,16 +322,14 @@
                 }
             }
 
-            // 3. 讀取支出明細
+            let resExp = await fetch(`https://docs.google.com/spreadsheets/d/${fallbackId}/gviz/tq?tqx=out:csv&sheet=支出明細表`);
             let totalExp = 0;
             let expTbody = document.querySelector('#expenseTable tbody');
             expTbody.innerHTML = "";
-            let expRes = await fetch(expenseCsvUrl);
-            if (expRes.ok) {
-                let expText = await expRes.text();
-                let expRows = parseCSV(expText);
-                for (let i = 1; i < expRows.length; i++) {
-                    let row = expRows[i];
+            if (resExp.ok) {
+                let rows = parseCSV(await resExp.text());
+                for (let i = 1; i < rows.length; i++) {
+                    let row = rows[i];
                     if (row[0] && row[1] !== undefined) {
                         let desc = row[0];
                         let amount = parseFloat(row[1].replace(/,/g, '')) || 0;
@@ -339,7 +340,7 @@
                 }
             }
 
-            // 4. 計算結餘
+            // 計算結餘
             let balance = totalInc - totalExp;
             document.getElementById('totalIncome').innerText = "NT$ " + totalInc.toLocaleString();
             document.getElementById('totalExpense').innerText = "NT$ " + totalExp.toLocaleString();
@@ -350,7 +351,7 @@
 
         } catch (error) {
             console.error(error);
-            alert("讀取試算表失敗，請確認 Google 試算表已完成「發布到網路」設定。");
+            alert("讀取發生錯誤，請重新確認發布狀態。");
         }
     }
 
