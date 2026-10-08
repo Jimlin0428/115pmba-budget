@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>國立臺灣大學 | 進修推廣學院115PMBA 財務收支公告</title>
+<!-- 引入 SheetJS 解析核心 -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
     body {
         font-family: "Noto Sans TC", Arial, sans-serif;
@@ -190,7 +192,7 @@
 <div class="toolbar">
     <div class="toolbar-left">🟢 財務資料即時連動中</div>
     <div class="toolbar-right">
-        <button onclick="loadFinancialData()">🔄 重新整理資料</button>
+        <button onclick="loadGoogleSheet()">🔄 重新整理資料</button>
         <button onclick="window.print()">🖨️ 列印 / 存成 PDF</button>
     </div>
 </div>
@@ -258,59 +260,59 @@
 </div>
 
 <script>
-    // 使用您發布到網路產生的正式識別碼
-    const pubId = "2PACX-1vT22S7s0m0AGTStMLRUi6FOouCpUU1KIBsaj4mTD4OAQPVqxXqcHiAPeZq0tlm275HqtKLrkOreCErH";
+    // 您的 Google 試算表 ID
+    const spreadsheetId = "1mNaHA0vF4oHWp14nyZTziDh4Q-E7Qi0j";
+    const sheetDownloadUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
 
-    // 透過 pub 網址帶入 gid 分頁代碼抓取各工作表 CSV（預設會對應您的三個分頁）
-    // 💡 提示：若您的工作表順序依序為 公告日期(gid=0)、收入明細表、支出明細表，可直接對應
-    const metaUrl = `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&gid=0`;
-    const incomeUrl = `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&gid=1387609805`; // 若gid不同可隨時在試算表分頁網址確認
-    const expenseUrl = `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv&gid=204273877`;
-
-    function parseCSV(text) {
-        let lines = text.split("\n");
-        return lines.map(line => {
-            let row = [];
-            let inQuotes = false;
-            let entry = "";
-            for (let c of line) {
-                if (c === '"') {
-                    inQuotes = !inQuotes;
-                } else if (c === ',' && !inQuotes) {
-                    row.push(entry.trim().replace(/^"|"$/g, ''));
-                    entry = "";
-                } else {
-                    entry += c;
-                }
-            }
-            row.push(entry.trim().replace(/^"|"$/g, ''));
-            return row;
-        });
+    function parseExcelDate(val) {
+        if (!val) return "";
+        if (typeof val === 'number') {
+            let utc_days = Math.floor(val - 25569);
+            let utc_value = utc_days * 86400;
+            let date_info = new Date(utc_value * 1000);
+            let year = date_info.getUTCFullYear();
+            let month = date_info.getUTCMonth() + 1;
+            let day = date_info.getUTCDate();
+            return `${year}/${month}/${day}`;
+        }
+        return String(val).trim();
     }
 
-    async function loadFinancialData() {
+    async function loadGoogleSheet() {
         try {
-            // 1. 讀取公告日期
-            let metaRes = await fetch(metaUrl);
-            if (metaRes.ok) {
-                let rows = parseCSV(await metaRes.text());
-                if (rows[0] && rows[0][1]) document.getElementById('pubDate').innerText = rows[0][1];
-                if (rows[1] && rows[1][1]) document.getElementById('pubPerson').innerText = rows[1][1];
-                if (rows[2] && rows[2][1]) document.getElementById('periodCardText').innerText = "收支明細 | 期間：" + rows[2][1];
+            let response = await fetch(sheetDownloadUrl);
+            if (!response.ok) throw new Error("無法讀取 Google 試算表，請確認共用權限。");
+            
+            let data = await response.arrayBuffer();
+            let workbook = XLSX.read(data, { type: 'array' });
+
+            // 1. 讀取「公告日期」分頁
+            let metaSheet = workbook.Sheets["公告日期"] || workbook.Sheets[workbook.SheetNames[0]];
+            if (metaSheet) {
+                let metaRows = XLSX.utils.sheet_to_json(metaSheet, { header: 1 });
+                if (metaRows[0] && metaRows[0][1] !== undefined) {
+                    document.getElementById('pubDate').innerText = parseExcelDate(metaRows[0][1]);
+                }
+                if (metaRows[1] && metaRows[1][1] !== undefined) {
+                    document.getElementById('pubPerson').innerText = metaRows[1][1];
+                }
+                if (metaRows[2] && metaRows[2][1] !== undefined) {
+                    document.getElementById('periodCardText').innerText = "收支明細 | 期間：" + parseExcelDate(metaRows[2][1]);
+                }
             }
 
-            // 2. 讀取收入明細
+            // 2. 讀取「收入明細表」分頁
             let totalInc = 0;
             let incTbody = document.querySelector('#incomeTable tbody');
             incTbody.innerHTML = "";
-            let incRes = await fetch(incomeUrl);
-            if (incRes.ok) {
-                let rows = parseCSV(await incRes.text());
-                for (let i = 1; i < rows.length; i++) {
-                    let row = rows[i];
+            let incSheet = workbook.Sheets["收入明細表"] || workbook.Sheets[1];
+            if (incSheet) {
+                let incRows = XLSX.utils.sheet_to_json(incSheet, { header: 1 });
+                for (let i = 1; i < incRows.length; i++) {
+                    let row = incRows[i];
                     if (row[0] && row[1] !== undefined) {
                         let desc = row[0];
-                        let amount = parseFloat(row[1].replace(/,/g, '')) || 0;
+                        let amount = parseFloat(String(row[1]).replace(/,/g, '')) || 0;
                         totalInc += amount;
                         let tr = incTbody.insertRow();
                         tr.innerHTML = `<td>${desc}</td><td class="text-right">${amount.toLocaleString()}</td>`;
@@ -318,18 +320,18 @@
                 }
             }
 
-            // 3. 讀取支出明細
+            // 3. 讀取「支出明細表」分頁
             let totalExp = 0;
             let expTbody = document.querySelector('#expenseTable tbody');
             expTbody.innerHTML = "";
-            let expRes = await fetch(expenseUrl);
-            if (expRes.ok) {
-                let rows = parseCSV(await expRes.text());
-                for (let i = 1; i < rows.length; i++) {
-                    let row = rows[i];
+            let expSheet = workbook.Sheets["支出明細表"] || workbook.Sheets[2];
+            if (expSheet) {
+                let expRows = XLSX.utils.sheet_to_json(expSheet, { header: 1 });
+                for (let i = 1; i < expRows.length; i++) {
+                    let row = expRows[i];
                     if (row[0] && row[1] !== undefined) {
                         let desc = row[0];
-                        let amount = parseFloat(row[1].replace(/,/g, '')) || 0;
+                        let amount = parseFloat(String(row[1]).replace(/,/g, '')) || 0;
                         totalExp += amount;
                         let tr = expTbody.insertRow();
                         tr.innerHTML = `<td>${desc}</td><td class="text-right">${amount.toLocaleString()}</td>`;
@@ -348,11 +350,11 @@
 
         } catch (error) {
             console.error(error);
-            alert("讀取試算表失敗，請確認該分頁已正確發布。");
+            alert("讀取試算表失敗，請確認該試算表已設為公開檢視權限。");
         }
     }
 
-    window.onload = loadFinancialData;
+    window.onload = loadGoogleSheet;
 </script>
 
 </body>
